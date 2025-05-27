@@ -8,7 +8,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 # Configuração da página
 # ---------------------------------
 st.set_page_config(page_title="Sistema Completo de Cadastro", layout="wide")
-st.title("🔐 Sistema de Cadastro - Streamlit")
+st.title("🔐 Sistema de Cadastro - Escola Biblica Dominical (EBD)")
 
 # ---------------------------------
 # Conexão com o banco de dados
