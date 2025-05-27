@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head><title>Relatórios</title></head>
+<body>
+    <h2>Relatórios</h2>
+    <p><a href="{{ url_for('dashboard') }}">Voltar</a></p>
+
+    <h3>Usuários por Classe</h3>
+    <ul>
+        {% for row in por_classe %}
+            <li>{{ row.classe }}: {{ row.total }}</li>
+        {% endfor %}
+    </ul>
+
+    <h3>Aniversariantes do Mês</h3>
+    <ul>
+        {% if aniversariantes %}
+            {% for user in aniversariantes %}
+                <li>{{ user.username }} - {{ user.nascimento }}</li>
+            {% endfor %}
+        {% else %}
+            <li>Nenhum aniversariante no mês.</li>
+        {% endif %}
+    </ul>
+
+    <h3>Tempo Médio</h3>
+    <p>{{ media_tempo | round(2) }}</p>
+</body>
+</html>
