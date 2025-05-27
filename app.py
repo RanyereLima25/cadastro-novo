@@ -31,15 +31,24 @@ def verificar_login(usuario, senha):
 
 
 def criar_usuario(usuario, senha):
-    try:
-        df = pd.read_csv("usuarios.csv")
-    except FileNotFoundError:
+    # Tenta carregar CSV, se não existir cria DataFrame vazio
+    if os.path.exists(USUARIOS_CSV):
+        df = pd.read_csv(USUARIOS_CSV)
+    else:
         df = pd.DataFrame(columns=["usuario", "senha"])
-
+    
+    # Verifica se usuário já existe
+    if usuario in df["usuario"].values:
+        st.error("Usuário já cadastrado!")
+        return False
+    
+    # Cria novo registro e concatena ao df
     novo_registro = pd.DataFrame([{"usuario": usuario, "senha": senha}])
     df = pd.concat([df, novo_registro], ignore_index=True)
-
-    df.to_csv("usuarios.csv", index=False)
+    
+    # Salva no CSV
+    df.to_csv(USUARIOS_CSV, index=False)
+    st.success("Usuário criado com sucesso!")
     return True
 
 
@@ -325,3 +334,18 @@ else:
             st.session_state['usuario'] = None
             st.success("Logout realizado com sucesso!")
             st.experimental_rerun()
+
+def main():
+    st.title("Cadastro de Usuário")
+    
+    usuario = st.text_input("Nome de usuário")
+    senha = st.text_input("Senha", type="password")
+    
+    if st.button("Cadastrar"):
+        if usuario.strip() == "" or senha.strip() == "":
+            st.warning("Por favor, preencha todos os campos.")
+        else:
+            criar_usuario(usuario, senha)
+
+if __name__ == "__main__":
+    main()
