@@ -103,7 +103,7 @@ if not st.session_state['login']:
                 st.session_state['login'] = True
                 st.session_state['usuario'] = usuario
                 st.success(f"Bem-vindo {usuario}")
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error("Login ou senha incorretos.")
 
@@ -207,4 +207,4 @@ else:
         st.session_state['login'] = False
         st.session_state.pop('usuario')
         st.success("Você saiu do sistema.")
-        st.experimental_rerun()
+        st.rerun()
