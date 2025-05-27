@@ -161,7 +161,7 @@ if not st.session_state['login']:
                 st.session_state['login'] = True
                 st.session_state['usuario'] = usuario
                 st.success(f"Bem-vindo {usuario}!")
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error("Login ou senha incorretos.")
 
@@ -238,7 +238,8 @@ else:
                 if st.button("Excluir Cadastro"):
                     excluir_pessoa(id_selecionado)
                     st.success("Cadastro excluído com sucesso!")
-                    st.experimental_rerun()
+                    st.rerun()
+
             else:
                 st.info("Nenhum cadastro para selecionar.")
 
@@ -287,7 +288,7 @@ else:
                     atualizar_pessoa(form_vars['id'], dados)
                     st.success("Cadastro atualizado com sucesso!")
 
-                st.experimental_rerun()
+                st.rerun()
 
     elif menu == "Visualizar":
         st.subheader("📊 Visualizar Cadastros")
@@ -336,4 +337,5 @@ else:
             st.session_state['login'] = False
             st.session_state['usuario'] = None
             st.success("Logout realizado com sucesso!")
-            st.experimental_rerun()
+            st.rerun()
+
