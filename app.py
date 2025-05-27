@@ -133,7 +133,7 @@ else:
             telefone = st.text_input("Telefone")
             tipo = st.selectbox("Tipo", ["Aluno", "Professor", "Outro"])
             matricula = st.text_input("Matrícula")
-            classe = st.selectbox("Classe", ["A", "B", "C", "D"])
+            classe = st.selectbox("Classe", ["SENHORES", "SENHORAS", "NOVOS CONVERTIDOS", "CASAIS","JOVENS","ANSIOES"])
             sala = st.text_input("Sala")
             ano_ingresso = st.text_input("Ano de Ingresso")
             cep = st.text_input("CEP")
