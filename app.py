@@ -31,11 +31,15 @@ def verificar_login(usuario, senha):
 
 
 def criar_usuario(usuario, senha):
-    df = carregar_usuarios()
-    if usuario in df['usuario'].values:
-        return False
-    df = df.append({"usuario": usuario, "senha": senha}, ignore_index=True)
-    salvar_usuarios(df)
+    try:
+        df = pd.read_csv("usuarios.csv")
+    except FileNotFoundError:
+        df = pd.DataFrame(columns=["usuario", "senha"])
+
+    novo_registro = pd.DataFrame([{"usuario": usuario, "senha": senha}])
+    df = pd.concat([df, novo_registro], ignore_index=True)
+
+    df.to_csv("usuarios.csv", index=False)
     return True
 
 
