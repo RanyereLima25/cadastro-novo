@@ -334,18 +334,3 @@ else:
             st.session_state['usuario'] = None
             st.success("Logout realizado com sucesso!")
             st.experimental_rerun()
-
-def main():
-    st.title("Cadastro de Usuário")
-    
-    usuario = st.text_input("Nome de usuário")
-    senha = st.text_input("Senha", type="password")
-    
-    if st.button("Cadastrar"):
-        if usuario.strip() == "" or senha.strip() == "":
-            st.warning("Por favor, preencha todos os campos.")
-        else:
-            criar_usuario(usuario, senha)
-
-if __name__ == "__main__":
-    main()
