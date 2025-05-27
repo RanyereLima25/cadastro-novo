@@ -6,7 +6,7 @@ import tempfile
 import matplotlib.pyplot as plt
 import io
 import os
-
+import bcrypt
 
 # Simulação banco de dados simples usando CSV local
 # No seu projeto, adapte para banco real ou outro meio persistente
@@ -28,37 +28,37 @@ def salvar_usuarios(df):
 
 def verificar_login(usuario, senha):
     df = carregar_usuarios()
-    user = df[(df['usuario'] == usuario) & (df['senha'] == senha)]
-    return not user.empty
+    user = df[df['usuario'] == usuario]
+    if user.empty:
+        return False
+    
+    senha_hash = user.iloc[0]['senha'].encode('utf-8')
+    return bcrypt.checkpw(senha.encode('utf-8'), senha_hash)
 
 
 def criar_usuario(usuario, senha):
-    # Tenta carregar CSV, se não existir cria DataFrame vazio
-    if os.path.exists(USUARIOS_CSV):
-        df = pd.read_csv(USUARIOS_CSV)
-    else:
-        df = pd.DataFrame(columns=["usuario", "senha"])
-    
-    # Verifica se usuário já existe
+    df = carregar_usuarios()
+
     if usuario in df["usuario"].values:
         st.error("Usuário já cadastrado!")
         return False
-    
-    # Cria novo registro e concatena ao df
-    novo_registro = pd.DataFrame([{"usuario": usuario, "senha": senha}])
+
+    # Criptografar a senha
+    senha_hash = bcrypt.hashpw(senha.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+    novo_registro = pd.DataFrame([{"usuario": usuario, "senha": senha_hash}])
     df = pd.concat([df, novo_registro], ignore_index=True)
-    
-    # Salva no CSV
-    df.to_csv(USUARIOS_CSV, index=False)
+
+    salvar_usuarios(df)
     st.success("Usuário criado com sucesso!")
     return True
 
+# ----- Cadastros -----
 
 def carregar_cadastros():
     try:
         return pd.read_csv(CADASTROS_CSV)
     except FileNotFoundError:
-        # Colunas conforme o formulário
         cols = ['id', 'nome', 'cpf', 'nascimento', 'email', 'telefone', 'tipo', 'matricula',
                 'classe', 'sala', 'ano_ingresso', 'cep', 'rua', 'numero', 'complemento',
                 'bairro', 'cidade', 'estado']
@@ -72,9 +72,9 @@ def salvar_cadastros(df):
 def cadastrar_pessoa(dados):
     df = carregar_cadastros()
     novo_id = 1 if df.empty else df['id'].max() + 1
-    nova_linha = dict(zip(df.columns[1:], dados))  # Ignorar 'id' pois vai colocar novo
+    nova_linha = dict(zip(df.columns[1:], dados))  # Ignorar 'id'
     nova_linha['id'] = novo_id
-    df = df.append(nova_linha, ignore_index=True)
+    df = pd.concat([df, pd.DataFrame([nova_linha])], ignore_index=True)
     salvar_cadastros(df)
 
 
@@ -90,6 +90,7 @@ def excluir_pessoa(id_pessoa):
     df = carregar_cadastros()
     df = df[df['id'] != id_pessoa]
     salvar_cadastros(df)
+
 
 
 def gerar_pdf(df, titulo, path_imagem):
