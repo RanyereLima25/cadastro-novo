@@ -1,164 +1,150 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file
+import streamlit as st
 import sqlite3
-from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+import pandas as pd
 import matplotlib.pyplot as plt
-import io
+from datetime import datetime
 
-app = Flask(__name__)
-app.secret_key = 'chave-secreta'  # Troque por uma chave forte
+# -------------------------------
+# Conexão com o banco
+# -------------------------------
+conn = sqlite3.connect('cadastro.db', check_same_thread=False)
+cursor = conn.cursor()
 
+# -------------------------------
+# Criação das tabelas
+# -------------------------------
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS usuarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        usuario TEXT UNIQUE NOT NULL,
+        senha TEXT NOT NULL
+    );
+""")
 
-# ------------------------------
-# Banco de dados
-# ------------------------------
-def criar_banco():
-    conn = sqlite3.connect('banco.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS usuarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT,
-            email TEXT UNIQUE,
-            senha TEXT,
-            data_nascimento TEXT,
-            classe TEXT
-        )
-    ''')
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS cadastro (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        classe TEXT,
+        data_nascimento DATE,
+        data_cadastro DATE
+    );
+""")
+conn.commit()
+
+# -------------------------------
+# Funções auxiliares
+# -------------------------------
+def cadastrar_usuario(usuario, senha):
+    try:
+        cursor.execute("INSERT INTO usuarios (usuario, senha) VALUES (?, ?)", (usuario, senha))
+        conn.commit()
+        return True
+    except:
+        return False
+
+def validar_login(usuario, senha):
+    cursor.execute("SELECT * FROM usuarios WHERE usuario = ? AND senha = ?", (usuario, senha))
+    return cursor.fetchone()
+
+def cadastrar_pessoa(nome, classe, data_nascimento):
+    data_cadastro = datetime.now().date()
+    cursor.execute("INSERT INTO cadastro (nome, classe, data_nascimento, data_cadastro) VALUES (?, ?, ?, ?)", 
+                   (nome, classe, data_nascimento, data_cadastro))
     conn.commit()
-    conn.close()
 
-criar_banco()
+def carregar_cadastros():
+    return pd.read_sql_query("SELECT * FROM cadastro", conn)
 
+# -------------------------------
+# Login
+# -------------------------------
+st.set_page_config(page_title="Sistema de Cadastro", layout="wide")
+st.title("🔐 Sistema de Cadastro com Streamlit")
 
-# ------------------------------
-# Rotas
-# ------------------------------
-@app.route('/')
-def index():
-    return redirect('/login')
+menu = ["Login", "Cadastrar Usuário"]
+escolha = st.sidebar.selectbox("Menu", menu)
 
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        email = request.form['email']
-        senha = request.form['senha']
-
-        conn = sqlite3.connect('banco.db')
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM usuarios WHERE email = ?', (email,))
-        usuario = cursor.fetchone()
-        conn.close()
-
-        if usuario and check_password_hash(usuario[3], senha):
-            session['usuario'] = usuario[1]
-            return redirect('/dashboard')
+if escolha == "Cadastrar Usuário":
+    st.subheader("Criar Conta")
+    novo_usuario = st.text_input("Usuário")
+    nova_senha = st.text_input("Senha", type="password")
+    if st.button("Cadastrar"):
+        sucesso = cadastrar_usuario(novo_usuario, nova_senha)
+        if sucesso:
+            st.success("Usuário cadastrado com sucesso!")
         else:
-            flash('Login inválido')
-            return redirect('/login')
+            st.error("Erro: Usuário já existe.")
 
-    return render_template('login.html')
+elif escolha == "Login":
+    st.subheader("Fazer Login")
+    usuario = st.text_input("Usuário")
+    senha = st.text_input("Senha", type="password")
+    if st.button("Entrar"):
+        resultado = validar_login(usuario, senha)
+        if resultado:
+            st.success(f"Bem-vindo {usuario}!")
 
+            # -------------------------------
+            # Menu após login
+            # -------------------------------
+            menu2 = ["Cadastrar", "Visualizar", "Relatórios", "Gráficos"]
+            escolha2 = st.sidebar.selectbox("Menu Principal", menu2)
 
-@app.route('/logout')
-def logout():
-    session.pop('usuario', None)
-    return redirect('/login')
+            if escolha2 == "Cadastrar":
+                st.subheader("📋 Cadastrar Pessoa")
+                nome = st.text_input("Nome Completo")
+                classe = st.selectbox("Classe", ["A", "B", "C", "D"])
+                data_nascimento = st.date_input("Data de Nascimento")
 
+                if st.button("Salvar Cadastro"):
+                    cadastrar_pessoa(nome, classe, data_nascimento)
+                    st.success("Cadastro realizado com sucesso!")
 
-@app.route('/cadastro', methods=['GET', 'POST'])
-def cadastro():
-    if request.method == 'POST':
-        nome = request.form['nome']
-        email = request.form['email']
-        senha = generate_password_hash(request.form['senha'])
-        data_nascimento = request.form['data_nascimento']
-        classe = request.form['classe']
+            elif escolha2 == "Visualizar":
+                st.subheader("📑 Dados Cadastrados")
+                df = carregar_cadastros()
+                st.dataframe(df)
 
-        conn = sqlite3.connect('banco.db')
-        cursor = conn.cursor()
+            elif escolha2 == "Relatórios":
+                st.subheader("📊 Relatórios")
+                df = carregar_cadastros()
 
-        try:
-            cursor.execute('''
-                INSERT INTO usuarios (nome, email, senha, data_nascimento, classe)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (nome, email, senha, data_nascimento, classe))
-            conn.commit()
-            flash('Usuário cadastrado com sucesso!')
-        except sqlite3.IntegrityError:
-            flash('Email já cadastrado.')
-        finally:
-            conn.close()
+                opcao = st.selectbox("Escolha o Relatório", ["Por Classe", "Por Período", "Aniversariantes", "Geral"])
 
-        return redirect('/cadastro')
+                if opcao == "Por Classe":
+                    classe = st.selectbox("Selecione a Classe", df['classe'].unique())
+                    st.dataframe(df[df['classe'] == classe])
 
-    return render_template('cadastro.html')
+                elif opcao == "Por Período":
+                    inicio = st.date_input("Data Inicial")
+                    fim = st.date_input("Data Final")
+                    df['data_cadastro'] = pd.to_datetime(df['data_cadastro'])
+                    resultado = df[(df['data_cadastro'] >= pd.to_datetime(inicio)) & 
+                                   (df['data_cadastro'] <= pd.to_datetime(fim))]
+                    st.dataframe(resultado)
 
+                elif opcao == "Aniversariantes":
+                    mes = st.selectbox("Selecione o mês", list(range(1, 13)))
+                    df['data_nascimento'] = pd.to_datetime(df['data_nascimento'])
+                    resultado = df[df['data_nascimento'].dt.month == mes]
+                    st.dataframe(resultado)
 
-@app.route('/dashboard')
-def dashboard():
-    if 'usuario' not in session:
-        return redirect('/login')
+                elif opcao == "Geral":
+                    st.dataframe(df)
 
-    conn = sqlite3.connect('banco.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM usuarios')
-    usuarios = cursor.fetchall()
-    conn.close()
+            elif escolha2 == "Gráficos":
+                st.subheader("📈 Gráficos de Cadastros")
+                df = carregar_cadastros()
 
-    return render_template('dashboard.html', usuarios=usuarios)
+                st.write("Distribuição por Classe")
+                graf = df['classe'].value_counts()
+                st.bar_chart(graf)
 
+                st.write("Cadastros por Mês")
+                df['data_cadastro'] = pd.to_datetime(df['data_cadastro'])
+                graf2 = df['data_cadastro'].dt.to_period("M").value_counts().sort_index()
+                st.line_chart(graf2)
 
-@app.route('/relatorios')
-def relatorios():
-    conn = sqlite3.connect('banco.db')
-    cursor = conn.cursor()
-
-    cursor.execute('SELECT classe, COUNT(*) FROM usuarios GROUP BY classe')
-    por_classe = cursor.fetchall()
-
-    cursor.execute('SELECT * FROM usuarios')
-    todos = cursor.fetchall()
-
-    cursor.execute('''
-        SELECT * FROM usuarios 
-        WHERE strftime('%m', data_nascimento) = strftime('%m', 'now')
-    ''')
-    aniversariantes = cursor.fetchall()
-
-    conn.close()
-
-    return render_template('relatorios.html', por_classe=por_classe, aniversariantes=aniversariantes, todos=todos)
-
-
-@app.route('/grafico')
-def grafico():
-    conn = sqlite3.connect('banco.db')
-    cursor = conn.cursor()
-
-    cursor.execute('SELECT classe, COUNT(*) FROM usuarios GROUP BY classe')
-    dados = cursor.fetchall()
-
-    conn.close()
-
-    classes = [d[0] for d in dados]
-    quantidades = [d[1] for d in dados]
-
-    plt.figure(figsize=(6,6))
-    plt.pie(quantidades, labels=classes, autopct='%1.1f%%')
-    plt.title('Distribuição por Classe')
-
-    img = io.BytesIO()
-    plt.savefig(img, format='png')
-    img.seek(0)
-    plt.close()
-
-    return send_file(img, mimetype='image/png')
-
-
-# ------------------------------
-# Rodar o app
-# ------------------------------
-if __name__ == '__main__':
-    app.run(debug=True)
+        else:
+            st.error("Usuário ou senha incorretos.")
