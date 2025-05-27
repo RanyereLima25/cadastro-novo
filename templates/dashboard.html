@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head><title>Dashboard</title></head>
+<body>
+    <h2>Dashboard</h2>
+    <p>Olá, {{ session.username }}! <a href="{{ url_for('logout') }}">Sair</a></p>
+    
+    <h3>Usuários cadastrados:</h3>
+    <table border="1">
+        <tr><th>ID</th><th>Usuário</th><th>Email</th><th>Data Nascimento</th><th>Classe</th><th>Tempo</th></tr>
+        {% for user in users %}
+        <tr>
+            <td>{{ user.id }}</td>
+            <td>{{ user.username }}</td>
+            <td>{{ user.email }}</td>
+            <td>{{ user.nascimento }}</td>
+            <td>{{ user.classe }}</td>
+            <td>{{ user.tempo }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <p><a href="{{ url_for('relatorios') }}">Ver Relatórios</a></p>
+    <img src="{{ url_for('grafico') }}" alt="Gráfico de usuários por classe">
+</body>
+</html>
