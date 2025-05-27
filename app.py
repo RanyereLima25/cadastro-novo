@@ -243,9 +243,9 @@ else:
             nascimento = st.date_input("Data de Nascimento", value=form_vars['nascimento'] if form_vars['nascimento'] else datetime(2000,1,1))
             email = st.text_input("Email", value=form_vars['email'])
             telefone = st.text_input("Telefone", value=form_vars['telefone'])
-            tipo = st.selectbox("Tipo", ["Aluno", "Professor", "Outro"], index=["Aluno", "Professor", "Outro"].index(form_vars['tipo']) if form_vars['tipo'] in ["Aluno", "Professor", "Outro"] else 0)
+            tipo = st.selectbox("Tipo", options=["Aluno", "Professor", "Funcionário", "Outro"], index=["Aluno", "Professor", "Funcionário", "Outro"].index(form_vars['tipo']) if form_vars['tipo'] in ["Aluno", "Professor", "Funcionário", "Outro"] else 0)
             matricula = st.text_input("Matrícula", value=form_vars['matricula'])
-            classe = st.selectbox("Classe", ["A", "B", "C", "D"], index=["A", "B", "C", "D"].index(form_vars['classe']) if form_vars['classe'] in ["A", "B", "C", "D"] else 0)
+            classe = st.text_input("Classe", value=form_vars['classe'])
             sala = st.text_input("Sala", value=form_vars['sala'])
             ano_ingresso = st.text_input("Ano de Ingresso", value=form_vars['ano_ingresso'])
             cep = st.text_input("CEP", value=form_vars['cep'])
@@ -256,102 +256,64 @@ else:
             cidade = st.text_input("Cidade", value=form_vars['cidade'])
             estado = st.text_input("Estado", value=form_vars['estado'])
 
-            submit = st.form_submit_button("Salvar Cadastro")
+            enviar = st.form_submit_button("Salvar")
 
-            if submit:
-                dados = (
-                    nome, cpf, nascimento.strftime('%Y-%m-%d'), email, telefone, tipo, matricula, classe,
-                    sala, ano_ingresso, cep, rua, numero, complemento, bairro, cidade, estado
-                )
+            if enviar:
+                dados = (nome, cpf, nascimento.strftime('%Y-%m-%d'), email, telefone, tipo, matricula, classe,
+                         sala, ano_ingresso, cep, rua, numero, complemento, bairro, cidade, estado)
+
                 if form_vars['id'] is None:
-                    # Novo cadastro
-                    try:
-                        cadastrar_pessoa(dados)
-                        st.success("Cadastro realizado com sucesso!")
-                        st.experimental_rerun()
-                    except sqlite3.IntegrityError as e:
-                        st.error(f"Erro no cadastro: {e}")
+                    cadastrar_pessoa(dados)
+                    st.success("Cadastro realizado com sucesso!")
                 else:
-                    # Atualizar cadastro existente
-                    try:
-                        atualizar_pessoa(form_vars['id'], dados)
-                        st.success("Cadastro atualizado com sucesso!")
-                        st.experimental_rerun()
-                    except sqlite3.IntegrityError as e:
-                        st.error(f"Erro na atualização: {e}")
+                    atualizar_pessoa(form_vars['id'], dados)
+                    st.success("Cadastro atualizado com sucesso!")
+
+                st.experimental_rerun()
 
     elif menu == "Visualizar":
-        st.subheader("📑 Dados Cadastrados")
+        st.subheader("📊 Visualizar Cadastros")
         df = carregar_cadastros()
-        st.dataframe(df)
+        if df.empty:
+            st.warning("Nenhum cadastro encontrado.")
+        else:
+            st.dataframe(df)
 
     elif menu == "Relatórios":
-        st.subheader("📊 Relatórios")
+        st.subheader("📄 Gerar Relatório em PDF")
         df = carregar_cadastros()
-        opcao = st.selectbox("Escolha o Relatório", ["Por Classe", "Por Ano de Ingresso", "Aniversariantes", "Geral"])
-
-        if opcao == "Por Classe":
-            classes = df['classe'].dropna().unique()
-            classe = st.selectbox("Selecione a Classe", classes)
-            df_filtro = df[df['classe'] == classe]
-        elif opcao == "Por Ano de Ingresso":
-            anos = df['ano_ingresso'].dropna().unique()
-            ano = st.selectbox("Selecione o Ano", anos)
-            df_filtro = df[df['ano_ingresso'] == ano]
-        elif opcao == "Aniversariantes":
-            mes = st.slider("Selecione o Mês", 1, 12)
-            df['mes_nasc'] = pd.to_datetime(df['nascimento'], errors='coerce').dt.month
-            df_filtro = df[df['mes_nasc'] == mes]
+        if df.empty:
+            st.warning("Nenhum dado para gerar relatório.")
         else:
-            df_filtro = df
+            if st.button("Gerar PDF"):
+                # Gerar gráfico simples para o relatório
+                plt.figure(figsize=(6,3))
+                tipo_counts = df['tipo'].value_counts()
+                tipo_counts.plot(kind='bar', color='skyblue')
+                plt.title("Quantidade por Tipo")
+                plt.xlabel("Tipo")
+                plt.ylabel("Quantidade")
+                plt.tight_layout()
 
-        st.dataframe(df_filtro)
+                # Salvar gráfico temporariamente
+                grafico_path = tempfile.NamedTemporaryFile(suffix='.png', delete=False).name
+                plt.savefig(grafico_path)
+                plt.close()
 
-        if st.button("Gerar PDF"):
-            # Criar gráfico simples para relatório
-            fig, ax = plt.subplots(figsize=(6,4))
-            contagem = df_filtro['tipo'].value_counts()
-            contagem.plot(kind='bar', ax=ax, color=['skyblue', 'orange', 'green'])
-            ax.set_title("Contagem por Tipo")
-            ax.set_ylabel("Quantidade")
-            ax.set_xlabel("Tipo")
-
-            # Salvar gráfico temporariamente
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-            plt.savefig(temp_file.name)
-            plt.close(fig)
-
-            pdf_buffer = gerar_pdf(df_filtro, titulo=f"Relatório: {opcao}", grafico_path=temp_file.name)
-
-            b64 = base64.b64encode(pdf_buffer.read()).decode()
-            href = f'<a href="data:file/pdf;base64,{b64}" download="relatorio.pdf">⬇️ Baixar Relatório PDF</a>'
-            st.markdown(href, unsafe_allow_html=True)
+                pdf_buffer = gerar_pdf(df, "Relatório de Cadastros", grafico_path)
+                b64 = base64.b64encode(pdf_buffer.read()).decode()
+                href = f'<a href="data:application/pdf;base64,{b64}" download="relatorio.pdf">⬇️ Clique para baixar o PDF</a>'
+                st.markdown(href, unsafe_allow_html=True)
 
     elif menu == "Gráficos":
-        st.subheader("📈 Gráficos")
+        st.subheader("📈 Gráficos dos Cadastros")
         df = carregar_cadastros()
-
         if df.empty:
-            st.info("Nenhum dado cadastrado para gerar gráficos.")
+            st.warning("Nenhum dado para gerar gráfico.")
         else:
-            tipo_grafico = st.selectbox("Tipo de Gráfico", ["Barra por Tipo", "Pizza por Classe"])
-
-            if tipo_grafico == "Barra por Tipo":
-                contagem = df['tipo'].value_counts()
-                fig, ax = plt.subplots()
-                contagem.plot(kind='bar', ax=ax, color=['#1f77b4', '#ff7f0e', '#2ca02c'])
-                ax.set_title("Contagem por Tipo")
-                ax.set_ylabel("Quantidade")
-                st.pyplot(fig)
-
-            elif tipo_grafico == "Pizza por Classe":
-                contagem = df['classe'].value_counts()
-                fig, ax = plt.subplots()
-                contagem.plot(kind='pie', ax=ax, autopct='%1.1f%%', startangle=90, colors=plt.cm.Paired.colors)
-                ax.set_ylabel("")
-                ax.set_title("Distribuição por Classe")
-                st.pyplot(fig)
+            st.bar_chart(df['tipo'].value_counts())
 
     elif menu == "Sair":
         st.session_state['login'] = False
+        st.session_state.pop('usuario', None)
         st.experimental_rerun()
