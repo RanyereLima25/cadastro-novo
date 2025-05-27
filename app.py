@@ -6,164 +6,159 @@ import matplotlib.pyplot as plt
 import io
 
 app = Flask(__name__)
-app.secret_key = 'sua_chave_secreta'
+app.secret_key = 'chave-secreta'  # Troque por uma chave forte
 
-DATABASE = 'app.db'
 
-def get_db():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-def init_db():
-    conn = get_db()
-    c = conn.cursor()
-    # Tabela usuários
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS users (
+# ------------------------------
+# Banco de dados
+# ------------------------------
+def criar_banco():
+    conn = sqlite3.connect('banco.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            nascimento DATE,
-            classe TEXT,
-            tempo INTEGER
+            nome TEXT,
+            email TEXT UNIQUE,
+            senha TEXT,
+            data_nascimento TEXT,
+            classe TEXT
         )
     ''')
     conn.commit()
     conn.close()
 
-@app.before_first_request
-def initialize():
-    init_db()
+criar_banco()
 
-# --------- AUTENTICAÇÃO ---------
 
+# ------------------------------
+# Rotas
+# ------------------------------
 @app.route('/')
 def index():
-    if 'user_id' in session:
-        return redirect(url_for('dashboard'))
-    return redirect(url_for('login'))
+    return redirect('/login')
 
-@app.route('/login', methods=['GET','POST'])
+
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE username = ?", (username,))
-        user = c.fetchone()
+        email = request.form['email']
+        senha = request.form['senha']
+
+        conn = sqlite3.connect('banco.db')
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM usuarios WHERE email = ?', (email,))
+        usuario = cursor.fetchone()
         conn.close()
-        if user and check_password_hash(user['password'], password):
-            session['user_id'] = user['id']
-            session['username'] = user['username']
-            flash('Login realizado com sucesso!', 'success')
-            return redirect(url_for('dashboard'))
+
+        if usuario and check_password_hash(usuario[3], senha):
+            session['usuario'] = usuario[1]
+            return redirect('/dashboard')
         else:
-            flash('Usuário ou senha incorretos', 'danger')
+            flash('Login inválido')
+            return redirect('/login')
+
     return render_template('login.html')
+
 
 @app.route('/logout')
 def logout():
-    session.clear()
-    flash('Você saiu da sessão.', 'info')
-    return redirect(url_for('login'))
+    session.pop('usuario', None)
+    return redirect('/login')
 
-# --------- CADASTRO ---------
 
 @app.route('/cadastro', methods=['GET', 'POST'])
 def cadastro():
     if request.method == 'POST':
-        username = request.form['username']
+        nome = request.form['nome']
         email = request.form['email']
-        nascimento = request.form['nascimento']  # formata YYYY-MM-DD
-        senha = request.form['password']
+        senha = generate_password_hash(request.form['senha'])
+        data_nascimento = request.form['data_nascimento']
         classe = request.form['classe']
-        tempo = request.form.get('tempo', 0)
 
-        hashed_password = generate_password_hash(senha)
+        conn = sqlite3.connect('banco.db')
+        cursor = conn.cursor()
 
-        conn = get_db()
-        c = conn.cursor()
         try:
-            c.execute('INSERT INTO users (username, password, email, nascimento, classe, tempo) VALUES (?, ?, ?, ?, ?, ?)',
-                      (username, hashed_password, email, nascimento, classe, tempo))
+            cursor.execute('''
+                INSERT INTO usuarios (nome, email, senha, data_nascimento, classe)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (nome, email, senha, data_nascimento, classe))
             conn.commit()
-            flash('Cadastro realizado com sucesso! Faça login.', 'success')
-            return redirect(url_for('login'))
+            flash('Usuário cadastrado com sucesso!')
         except sqlite3.IntegrityError:
-            flash('Usuário ou email já cadastrado.', 'danger')
+            flash('Email já cadastrado.')
         finally:
             conn.close()
 
+        return redirect('/cadastro')
+
     return render_template('cadastro.html')
 
-# --------- DASHBOARD / VISUALIZAÇÃO ---------
 
 @app.route('/dashboard')
 def dashboard():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("SELECT * FROM users")
-    users = c.fetchall()
-    conn.close()
-    return render_template('dashboard.html', users=users)
+    if 'usuario' not in session:
+        return redirect('/login')
 
-# --------- RELATÓRIOS ---------
+    conn = sqlite3.connect('banco.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM usuarios')
+    usuarios = cursor.fetchall()
+    conn.close()
+
+    return render_template('dashboard.html', usuarios=usuarios)
+
 
 @app.route('/relatorios')
 def relatorios():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
+    conn = sqlite3.connect('banco.db')
+    cursor = conn.cursor()
 
-    conn = get_db()
-    c = conn.cursor()
+    cursor.execute('SELECT classe, COUNT(*) FROM usuarios GROUP BY classe')
+    por_classe = cursor.fetchall()
 
-    # Exemplo: relatório geral (quantidade por classe)
-    c.execute("SELECT classe, COUNT(*) as total FROM users GROUP BY classe")
-    por_classe = c.fetchall()
+    cursor.execute('SELECT * FROM usuarios')
+    todos = cursor.fetchall()
 
-    # Aniversariantes do mês atual
-    mes_atual = datetime.now().month
-    c.execute("SELECT username, nascimento FROM users WHERE strftime('%m', nascimento) = ?", (f'{mes_atual:02}',))
-    aniversariantes = c.fetchall()
-
-    # Tempo médio
-    c.execute("SELECT AVG(tempo) as media_tempo FROM users")
-    media_tempo = c.fetchone()['media_tempo']
+    cursor.execute('''
+        SELECT * FROM usuarios 
+        WHERE strftime('%m', data_nascimento) = strftime('%m', 'now')
+    ''')
+    aniversariantes = cursor.fetchall()
 
     conn.close()
-    return render_template('relatorios.html', por_classe=por_classe, aniversariantes=aniversariantes, media_tempo=media_tempo)
 
-# --------- GRÁFICOS ---------
+    return render_template('relatorios.html', por_classe=por_classe, aniversariantes=aniversariantes, todos=todos)
 
-@app.route('/grafico.png')
+
+@app.route('/grafico')
 def grafico():
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("SELECT classe, COUNT(*) as total FROM users GROUP BY classe")
-    data = c.fetchall()
+    conn = sqlite3.connect('banco.db')
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT classe, COUNT(*) FROM usuarios GROUP BY classe')
+    dados = cursor.fetchall()
+
     conn.close()
 
-    classes = [row['classe'] for row in data]
-    total = [row['total'] for row in data]
+    classes = [d[0] for d in dados]
+    quantidades = [d[1] for d in dados]
 
-    plt.figure(figsize=(6,4))
-    plt.bar(classes, total, color='skyblue')
-    plt.title('Usuários por Classe')
-    plt.xlabel('Classe')
-    plt.ylabel('Quantidade')
+    plt.figure(figsize=(6,6))
+    plt.pie(quantidades, labels=classes, autopct='%1.1f%%')
+    plt.title('Distribuição por Classe')
 
     img = io.BytesIO()
     plt.savefig(img, format='png')
     img.seek(0)
     plt.close()
+
     return send_file(img, mimetype='image/png')
 
-# --------- RUN ---------
 
+# ------------------------------
+# Rodar o app
+# ------------------------------
 if __name__ == '__main__':
-    app.run(debug=True)# Código do app estará aqui
+    app.run(debug=True)
